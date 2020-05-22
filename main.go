@@ -194,7 +194,7 @@ func writeBloomFile(prefix string, bloomFilter *bloom.BloomFilter) {
 	bloomFilter.WriteTo(buffer)
 
 	bloomFile := getBloomFileName(prefix)
-	file, err := os.OpenFile(bloomFile, os.O_WRONLY, os.ModeAppend)
+	file, err := os.Create(bloomFile)
 	defer file.Close()
 	if err != nil {
 		log.Fatalf("%s: %s", ErrOpenBloomFile.Error(), bloomFile)
@@ -209,11 +209,15 @@ func writeBloomFile(prefix string, bloomFilter *bloom.BloomFilter) {
 
 func getBloomFilter(prefix string) *bloom.BloomFilter {
 	bloomFilter, ok := bloomMap[prefix]
+	bloomFileName := getBloomFileName(prefix)
 	if !ok {
 		// 创建文件
-		os.Create(getBloomFileName(prefix))
+		os.Create(bloomFileName)
 		bloomMap[prefix] = newBloomFilter()
 		return bloomMap[prefix]
+	}
+	if !existFile(bloomFileName) {
+		os.Create(bloomFileName)
 	}
 	return bloomFilter
 }
