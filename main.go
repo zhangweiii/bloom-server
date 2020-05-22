@@ -40,9 +40,24 @@ func main() {
 	go receiveSignal()  // 监听停止信号，写入布隆文件
 	go WriteBloomFile() // 定时写入布隆文件
 
+	http.HandleFunc("/add/", addHandler)
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
 	log.Printf("server on http://127.0.0.1:%s\n", *port)
+}
+
+func addHandler(w http.ResponseWriter, r *http.Request) {
+	prefix := getParam(r, "prefix")
+	url := getParam(r, "url")
+
+	if len(prefix) == 0 {
+		fmt.Fprintf(w, "prefix参数错误")
+		return
+	}
+
+	addURL(url, prefix)
+
+	fmt.Fprintf(w, "success")
 }
 
 func loadBloom() {
@@ -53,6 +68,9 @@ func loadBloom() {
 
 	for _, file := range files {
 		fileName := file.Name()
+		if !strings.HasSuffix(fileName, "_bloomfilter.txt") {
+			continue
+		}
 		filePath := bloomDir + fileName
 		f, err := os.Open(filePath)
 
