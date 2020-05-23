@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/willf/bloom"
 )
 
@@ -40,24 +41,27 @@ func main() {
 	go receiveSignal()  // 监听停止信号，写入布隆文件
 	go WriteBloomFile() // 定时写入布隆文件
 
-	http.HandleFunc("/add/", addHandler)
-	http.HandleFunc("/", handler)
-	log.Fatal(http.ListenAndServe(":"+*port, nil))
+	g := gin.Default()
+
+	g.GET("/add/", addHandler)
+	g.GET("/", handler)
+
 	log.Printf("server on http://127.0.0.1:%s\n", *port)
+	log.Fatal(g.Run(":" + *port))
 }
 
-func addHandler(w http.ResponseWriter, r *http.Request) {
-	prefix := getParam(r, "prefix")
-	url := getParam(r, "url")
+func addHandler(c *gin.Context) {
+	prefix := c.Query("prefix")
+	url := c.Query("url")
 
 	if len(prefix) == 0 {
-		fmt.Fprintf(w, "prefix参数错误")
+		c.String(http.StatusOK, "prefix参数错误")
 		return
 	}
 
 	addURL(url, prefix)
 
-	fmt.Fprintf(w, "success")
+	c.String(http.StatusOK, "success")
 }
 
 func loadBloom() {
@@ -71,9 +75,9 @@ func loadBloom() {
 		if !strings.HasSuffix(fileName, "_bloomfilter.txt") {
 			continue
 		}
+
 		filePath := bloomDir + fileName
 		f, err := os.Open(filePath)
-
 		if err != nil {
 			continue
 		}
@@ -82,6 +86,7 @@ func loadBloom() {
 		filter.ReadFrom(f)
 		bloomMap[strings.Split(fileName, "_")[0]] = filter
 		log.Printf("加载%s完毕\n", filePath)
+		f.Close()
 	}
 	log.Println("加载布隆文件完成")
 }
@@ -113,20 +118,20 @@ func WriteBloomFile() {
 	}
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
-	prefix := getParam(r, "prefix")
-	url := getParam(r, "url")
+func handler(c *gin.Context) {
+	prefix := c.Query("prefix")
+	url := c.Query("url")
 
 	if len(prefix) == 0 {
-		fmt.Fprintf(w, "prefix参数错误")
+		c.String(http.StatusOK, "prefix参数错误")
 		return
 	}
 
 	exist, err := existURL(url, prefix)
 	if err != nil {
-		fmt.Fprintf(w, "%v", err.Error())
+		c.String(http.StatusOK, err.Error())
 	} else {
-		fmt.Fprintf(w, "%v", exist)
+		c.String(http.StatusOK, fmt.Sprintf("%v", exist))
 	}
 
 }
@@ -178,6 +183,7 @@ func existURL(url, prefix string) (bool, error) {
 // addURL 将url添加到布隆里面
 func addURL(url, prefix string) {
 	mutex.Lock()
+	defer mutex.Unlock()
 	bloomFilter := getBloomFilter(prefix)
 
 	if bloomFilter == nil {
@@ -186,7 +192,6 @@ func addURL(url, prefix string) {
 	}
 
 	bloomFilter.Add([]byte(url))
-	mutex.Unlock()
 }
 
 func writeBloomFile(prefix string, bloomFilter *bloom.BloomFilter) {
